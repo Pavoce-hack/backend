@@ -3,6 +3,8 @@ import { ValidationResult } from "joi";
 import { loginSchema, userSchema } from "../utils/joiSchemas";
 import { verifyUser } from "../utils/validation";
 import { userResolver } from "../resolvers/userResolver";
+import { uploadToCloudinary } from "../utils/cloudinary";
+import { UserDocument } from "../models/user";
 
 export const createUser = async (req: Request, res: Response) => {
   const { walletId, fullName, businessName } = req.body;
@@ -18,15 +20,26 @@ export const createUser = async (req: Request, res: Response) => {
       let profilePicUrl;
       let businessLogoUrl;
       if (req.files) {
-        const valuesArr: { path: string }[] = Object.values(req.files).flat();
-        profilePicUrl = valuesArr[0].path;
-        businessLogoUrl = valuesArr[1].path;
+        const valuesArr: any[] = Object.values(req.files).flat();
+        console.log(valuesArr);
+        
+        if (valuesArr[0]) {
+          // Upload profile picture to Cloudinary
+          profilePicUrl = await uploadToCloudinary(valuesArr[0]);
+        }
+
+        if (valuesArr[1]) {
+          // Upload business logo to Cloudinary
+          businessLogoUrl = await uploadToCloudinary(valuesArr[1]);
+        }
       }
+      console.log(profilePicUrl, businessLogoUrl);
+      
       if (existingUser) {
         const message = "User already exists!!! Login instead";
         return res.status(409).json(message);
       } else {
-        const newUser = {
+        const newUser: any = {
           walletId,
           fullName,
           businessName,
@@ -157,7 +170,9 @@ export const getUser = async (req: Request, res: Response) => {
     if (!user) {
       return res.status(400).json({ message: `User with ID: ${id} not found` });
     } else {
-      return res.status(200).json({ message: "User retrieved successfully", user });
+      return res
+        .status(200)
+        .json({ message: "User retrieved successfully", user });
     }
   } catch (error) {
     res.status(500).json(error);
