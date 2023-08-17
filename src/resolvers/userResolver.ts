@@ -38,7 +38,7 @@ export const userResolver = {
         businessLogo,
         profilePic,
       });
-      const newUser = await UserModel.create({
+      const newUser = new UserModel({
         walletId,
         fullName,
         businessName,
@@ -53,14 +53,11 @@ export const userResolver = {
       args: {
         walletId: string;
       }
-    ): Promise<UserDocument> => {
+    ): Promise<UserDocument | { error: string }> => {
       const { walletId } = args;
       const user = await UserModel.findOne({ walletId });
       if (!user) {
-        throw new Error("Invalid email or password");
-      }
-      if (user.walletId !== walletId) {
-        throw new Error("Invalid email or password");
+        return { error: "User not found, kindly register" };
       }
       return user;
     },

@@ -3,7 +3,7 @@ import {
   createInvoice,
   deleteInvoice,
   getAllInvoices,
-  getInvoice,
+  getUserInvoices,
   updateInvoice,
 } from "../controllers/invoice";
 import { verifyToken } from "../utils/validation";
@@ -14,6 +14,6 @@ router.post("/create", verifyToken, createInvoice);
 router.patch("/update/:id", verifyToken, updateInvoice);
 router.delete("/delete/:id", verifyToken, deleteInvoice);
 router.get("/all", verifyToken, getAllInvoices);
-router.get("/:id", verifyToken, getInvoice);
+router.get("/user-invoices", verifyToken, getUserInvoices);
 
 export default router;

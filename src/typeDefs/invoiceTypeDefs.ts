@@ -14,6 +14,11 @@ const typeDefs = gql`
     services: [Service]!
     startDate: String!
     endDate: String!
+    duration: Float!
+    installment: Float!
+    initialDeposit: Float!
+    discount: Float!
+    termsAndConditions: [String]!
   }
 
   input InvoiceInput {
@@ -28,6 +33,11 @@ const typeDefs = gql`
     services: [ServiceInput]!
     startDate: String!
     endDate: String!
+    duration: Float!
+    installment: Float!
+    initialDeposit: Float!
+    discount: Float!
+    termsAndConditions: [String]!
   }
 
   type Query {
