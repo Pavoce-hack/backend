@@ -19,6 +19,11 @@ export const invoiceSchema = Joi.object({
   services: Joi.array().items(serviceSchema).required(),
   startDate: Joi.date().required(),
   endDate: Joi.date().required(),
+  duration: Joi.number().required(),
+  installment: Joi.number().required(),
+  initialDeposit: Joi.number().required(),
+  discount: Joi.number().required(),
+  termsAndConditions: Joi.array().items(Joi.string()).required(),
 });
 
 export const userSchema = Joi.object({

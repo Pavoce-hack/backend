@@ -24,16 +24,43 @@ export const verifyToken = async (
   next: NextFunction
 ) => {
   try {
-    const token = req.cookies[`${cookie}`];
-    const verifiedUser = jwt.verify(token, process.env.JWT_SECRET as string);
-    if (verifiedUser) {
-      req.authentication = true;
-      req.user = verifiedUser;
-      next();
+    const authHeader = req.headers["authorization"];    
+    if (authHeader) {
+      const token = authHeader.split(" ")[1]; // Split the 'Bearer ' prefix
+      const verifiedUser = jwt.verify(token, process.env.JWT_SECRET as string);
+      if (verifiedUser) {
+        req.authentication = true;
+        req.user = verifiedUser;
+        next();
+      } else {
+        return res.status(400).json("Invalid token");
+      }
     } else {
-      return res.status(400).json("Invalid token");
+      return res.status(401).json("Unauthorized");
+    }
+  } catch (error) {
+    console.log('error');
+    return res.status(500).json(error);
+  }
+};
+
+/*  try {
+    const authHeader = req.headers['authorization'];
+    if (authHeader) {
+      const token = authHeader.split(' ')[1]; // Split the 'Bearer ' prefix
+      const verifiedUser = jwt.verify(token, process.env.JWT_SECRET);
+      if (verifiedUser) {
+        req.authentication = true;
+        req.user = verifiedUser;
+        next();
+      } else {
+        return res.status(400).json('Invalid token');
+      }
+    } else {
+      return res.status(401).json('Unauthorized');
     }
   } catch (error) {
     return res.status(500).json(error);
   }
-};
+  
+  */

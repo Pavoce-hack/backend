@@ -3,7 +3,6 @@ import mongoose, { Document, Schema } from "mongoose";
 export interface UserDocument extends Document {
     fullName: string;
     walletId: string;
-    image: string;
     businessName: string;
     profilePic: string;
     businessLogo: string;
@@ -15,7 +14,6 @@ export interface UserDocument extends Document {
     {
       fullName: { type: String, required: true },
       walletId: { type: String, required: true, unique: true },
-      image: { type: String },
       businessName: { type: String, required: true },
       profilePic: { type: String },
       businessLogo: { type: String },

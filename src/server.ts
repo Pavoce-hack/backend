@@ -6,6 +6,7 @@ import { userResolver } from "./resolvers/userResolver";
 import invoiceTypeDefs from "./typeDefs/invoiceTypeDefs";
 import userTypeDefs from "./typeDefs/userTypeDefs";
 import dotenv from "dotenv";
+import cors from "cors";
 import logger from "morgan";
 import path from "path";
 import cookieParser from "cookie-parser";
@@ -13,6 +14,7 @@ import session from "express-session";
 import userRoutes from "./routes/user";
 import invoiceRoutes from "./routes/invoice";
 import { cloudinaryMiddleware } from "./utils/cloudinary";
+import jwt from "jsonwebtoken"; // Import the JWT library
 
 interface MongooseOpts {
   useNewUrlParser?: boolean;
@@ -22,6 +24,22 @@ interface MongooseOpts {
 dotenv.config();
 const app = express();
 
+app.use((req, res, next) => {
+  res.setHeader("Access-Control-Allow-Origin", "http://localhost:3000");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  res.setHeader("Access-Control-Allow-Origin", "https://res.cloudinary.com");
+
+  next();
+});
+
+app.use(
+  cors({
+    origin: "*",
+    methods: ["GET", "POST", "PUT", "DELETE"],
+    credentials: true,
+  })
+);
 app.use(logger("dev"));
 app.use(
   session({
@@ -60,6 +78,21 @@ const startApolloServer = async () => {
   const server = new ApolloServer({
     typeDefs: [userTypeDefs, invoiceTypeDefs],
     resolvers: [invoiceResolver, userResolver],
+    context: ({ req }) => {
+      // Get the token from the request headers
+      const token = req.headers.authorization || "";
+
+      // Verify and decode the token
+      try {
+        const verifiedUser = jwt.verify(
+          token.replace("Bearer ", ""),
+          process.env.JWT_SECRET as string
+        );
+        return { authentication: true, user: verifiedUser };
+      } catch (error) {
+        return { authentication: false, user: null };
+      }
+    },
   });
 
   await server.start();

@@ -10,7 +10,7 @@ interface Service {
 enum InvoiceStatus {
   APPROVED = "Approved",
   COMPLETE = "Complete",
-  DEPOSIT = "Deposit",
+  DISPUTED = "Disputed",
   PAID = "Paid",
   PENDING = "Pending",
 }
@@ -25,8 +25,13 @@ export interface InvoiceDocument {
   clientName: string;
   clientEmail: string;
   services: Service[];
-  startDate: Date;
-  endDate: Date;
+  startDate: String;
+  endDate: String;
+  duration: number;
+  installment: number;
+  initialDeposit: number;
+  discount: number;
+  termsAndConditions: string[];
   createdAt: Date;
   updatedAt: Date;
 }
@@ -49,8 +54,13 @@ const invoiceSchema = new Schema<InvoiceDocument>(
         rate: { type: Number, required: true },
       },
     ],
-    startDate: { type: Date, required: true },
-    endDate: { type: Date, required: true },
+    startDate: { type: String, required: true },
+    endDate: { type: String, required: true },
+    duration: { type: Number, required: true },
+    installment: { type: Number, required: true },
+    initialDeposit: { type: Number, required: true },
+    discount: { type: Number, required: true },
+    termsAndConditions: { type: [String], required: true },
   },
   {
     timestamps: true,

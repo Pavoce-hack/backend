@@ -6,8 +6,8 @@ import { userResolver } from "../resolvers/userResolver";
 import { uploadToCloudinary } from "../utils/cloudinary";
 import { UserDocument } from "../models/user";
 
-export const createUser = async (req: Request, res: Response) => {
-  const { walletId, fullName, businessName } = req.body;
+export const createUser = async (req: Request | any, res: Response) => {
+  const { walletId, fullName, businessName }: UserDocument = req.body;
   const validation: ValidationResult = userSchema.validate(req.body);
   try {
     if (validation.error) {
@@ -21,25 +21,20 @@ export const createUser = async (req: Request, res: Response) => {
       let businessLogoUrl;
       if (req.files) {
         const valuesArr: any[] = Object.values(req.files).flat();
-        console.log(valuesArr);
-        
         if (valuesArr[0]) {
           // Upload profile picture to Cloudinary
           profilePicUrl = await uploadToCloudinary(valuesArr[0]);
         }
-
         if (valuesArr[1]) {
           // Upload business logo to Cloudinary
           businessLogoUrl = await uploadToCloudinary(valuesArr[1]);
         }
       }
-      console.log(profilePicUrl, businessLogoUrl);
-      
       if (existingUser) {
         const message = "User already exists!!! Login instead";
         return res.status(409).json(message);
       } else {
-        const newUser: any = {
+        const newUser = {
           walletId,
           fullName,
           businessName,
@@ -66,9 +61,9 @@ export const loginUser = async (req: Request, res: Response) => {
         .status(400)
         .json({ error: validUser.error.details[0].message });
     }
-    const user = await userResolver.Mutation.loginUser(null, { walletId });
-    if (!user) {
-      return res.status(400).json("User not found, kindly register");
+    const user: any = await userResolver.Mutation.loginUser(null, { walletId });
+    if (user.error) {
+      return res.status(400).json(user.error);
     } else {
       const id = user._id;
       const token = verifyUser(id, walletId);

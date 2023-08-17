@@ -29,7 +29,6 @@ export const createInvoice = async (req: Request, res: Response) => {
       if (newInvoice.errors) {
         return res.status(400).json(newInvoice);
       }
-      console.log(newInvoice);
 
       return res
         .status(201)
@@ -90,16 +89,21 @@ export const getAllInvoices = async (req: Request, res: Response) => {
     return res.status(500).json(error);
   }
 };
-export const getInvoice = async (req: Request, res: Response) => {
+
+export const getUserInvoices = async (req: Request, res: Response) => {
   try {
-    const { id } = req.params;
-    const requiredInvoice = await invoiceResolver.Query.invoiceById(null, {
-      _id: id,
-    });    
-    if (!requiredInvoice) {
-      return res.status(404).json({ error: `Invoice with ID:${id} not found` });
+    const loggedInUser: any = req.user;
+    const userId = loggedInUser?.id;
+    const requiredInvoices = await invoiceResolver.Query.invoiceById(
+      null,
+      userId
+    );
+    if (!requiredInvoices) {
+      return res
+        .status(404)
+        .json({ error: `No invoice found for user with ID:${userId}` });
     }
-    return res.status(200).json({ requiredInvoice });
+    return res.status(200).json({ requiredInvoices });
   } catch (error) {
     return res.status(500).json(error);
   }
