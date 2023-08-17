@@ -1,0 +1,260 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+contract InvoicingDApp {
+    address public owner;
+    uint256 public latePaymentFeePercentage = 5;
+
+    enum InvoiceStatus { Unpaid, Paid, Canceled }
+
+    struct Invoice {
+        address payable recipient;
+        uint256 amount;
+        uint256 dueDate;
+        bool paid;
+        bool canceled;
+        string description;
+        uint256 latePaymentFee;
+        uint256[] paymentHistory;
+    }
+    mapping(uint256 => Invoice) public invoices;
+    uint256 public nextInvoiceId;
+
+    event InvoiceCreated(uint256 indexed invoiceId, address indexed recipient, uint256 amount, uint256 dueDate, string description);
+    event InvoicePaid(uint256 indexed invoiceId, uint256 amount);
+    event InvoiceCanceled(uint256 indexed invoiceId);
+    event InvoiceDueDateExtended(uint256 indexed invoiceId, uint256 newDueDate);
+    event InvoiceUpdated(uint256 indexed invoiceId, uint256 amount, uint256 dueDate, string description);
+    event LatePaymentFeeSet(uint256 feePercentage);
+    event LatePaymentFeeAdded(uint256 indexed invoiceId, uint256 amount);
+
+    constructor() {
+        owner = msg.sender;
+        nextInvoiceId = 1;
+    }
+
+    modifier onlyOwner() {
+        require(msg.sender == owner, "Only the contract owner can call this function");
+        _;
+    }
+    modifier onlyRecipient(uint256 invoiceId) {
+        require(msg.sender == invoices[invoiceId].recipient, "Only the recipient can call this function");
+        _;
+    }
+
+    function setLatePaymentFee(uint256 feePercentage) external onlyOwner {
+        require(feePercentage >= 0 && feePercentage <= 100, "Late payment fee percentage must be between 0 and 100");
+        latePaymentFeePercentage = feePercentage;
+        emit LatePaymentFeeSet(feePercentage);
+    }
+
+    function calculateLatePaymentFee(uint256 invoiceId) internal view returns (uint256) {
+        Invoice storage invoice = invoices[invoiceId];
+        if (invoice.latePaymentFee > 0) {
+            return 0; // Late payment fee already added
+        }
+
+        uint256 dueAmount = invoice.amount;
+        uint256 daysLate = (block.timestamp > invoice.dueDate) ? (block.timestamp - invoice.dueDate) / 1 days : 0;
+        uint256 lateFeeAmount = (dueAmount * latePaymentFeePercentage * daysLate) / 10000;
+        return lateFeeAmount;
+    }
+    function createInvoice(address payable recipient, uint256 amount, uint256 dueDate, string memory description) external {
+        require(amount > 0, "Amount must be greater than zero");
+
+        invoices[nextInvoiceId] = Invoice(recipient, amount, dueDate, false, false, description, 0, new uint256[](0));
+        emit InvoiceCreated(nextInvoiceId, recipient, amount, dueDate, description);
+
+        nextInvoiceId++;
+    }
+
+    function payInvoice(uint256 invoiceId) external payable {
+        Invoice storage invoice = invoices[invoiceId];
+        require(!invoice.paid, "Invoice has already been paid");
+        require(!invoice.canceled, "Invoice has been canceled");
+        require(block.timestamp <= invoice.dueDate, "Invoice is past due date");
+
+        uint256 dueAmount = invoice.amount;
+        uint256 lateFeeAmount = calculateLatePaymentFee(invoiceId);
+        uint256 totalAmountDue = dueAmount + lateFeeAmount;
+        require(msg.value >= totalAmountDue, "Insufficient payment amount");
+
+        invoice.paid = true;
+        if (lateFeeAmount > 0) {
+            invoice.latePaymentFee = lateFeeAmount;
+            emit LatePaymentFeeAdded(invoiceId, lateFeeAmount);
+        }
+        invoice.paymentHistory.push(msg.value);
+        emit InvoicePaid(invoiceId, msg.value);
+
+        if (msg.value > totalAmountDue) {
+            // Refund any excess payment
+            uint256 refundAmount = msg.value - totalAmountDue;
+            payable(msg.sender).transfer(refundAmount);
+        }
+    }
+
+    function cancelInvoice(uint256 invoiceId) external onlyRecipient(invoiceId) {
+        Invoice storage invoice = invoices[invoiceId];
+        require(!invoice.paid, "Cannot cancel a paid invoice");
+        require(!invoice.canceled, "Invoice has already been canceled");
+
+        invoice.canceled = true;
+        emit InvoiceCanceled(invoiceId);
+    }
+
+    function extendDueDate(uint256 invoiceId, uint256 newDueDate) external onlyRecipient(invoiceId) {
+        require(newDueDate > block.timestamp, "New due date must be in the future");
+
+        Invoice storage invoice = invoices[invoiceId];
+        require(!invoice.canceled, "Cannot extend the due date of a canceled invoice");
+
+        invoice.dueDate = newDueDate;
+        emit InvoiceDueDateExtended(invoiceId, newDueDate);
+    }
+
+    function updateInvoice(uint256 invoiceId, uint256 amount, uint256 dueDate, string memory description) external onlyOwner {
+        require(amount > 0, "Amount must be greater than zero");
+
+        Invoice storage invoice = invoices[invoiceId];
+        require(!invoice.paid, "Cannot update a paid invoice");
+invoice.amount = amount;
+        invoice.dueDate = dueDate;
+        invoice.description = description;
+        emit InvoiceUpdated(invoiceId, amount, dueDate, description);
+    }
+
+    function getInvoiceDetails(uint256 invoiceId) external view returns (address, uint256, uint256, bool, bool, string memory, uint256) {
+        Invoice storage invoice = invoices[invoiceId];
+        return (invoice.recipient, invoice.amount, invoice.dueDate, invoice.paid, invoice.canceled, invoice.description, invoice.latePaymentFee);
+    }
+
+    function getContractBalance() external view returns (uint256) {
+        return address(this).balance;
+    }
+
+    function withdrawFunds() external onlyOwner {
+        require(address(this).balance > 0, "Contract balance is zero");
+        (bool success, ) = owner.call{ value: address(this).balance }("");
+        require(success, "Withdrawal failed");
+    }
+
+    function getTotalNumberOfInvoices() external view returns (uint256) {
+        return nextInvoiceId - 1;
+    }
+
+    function getInvoiceStatus(uint256 invoiceId) external view returns (InvoiceStatus) {
+        Invoice storage invoice = invoices[invoiceId];
+        if (invoice.canceled) {
+            return InvoiceStatus.Canceled;
+        } else if (invoice.paid) {
+            return InvoiceStatus.Paid;
+        } else {
+            if (block.timestamp > invoice.dueDate) {
+                return InvoiceStatus.Canceled; // Mark as canceled if past due date and not paid
+            } else {
+                return InvoiceStatus.Unpaid;
+            }
+        }
+    }
+
+    function isInvoiceOverdue(uint256 invoiceId) external view returns (bool) {
+        Invoice storage invoice = invoices[invoiceId];
+        return (!invoice.paid && !invoice.canceled && block.timestamp > invoice.dueDate);
+    }
+
+    function listUnpaidInvoices() external view returns (uint256[] memory) {
+        uint256[] memory unpaidInvoiceIds = new uint256[](nextInvoiceId - 1);
+        uint256 count;
+        for (uint256 i = 1; i < nextInvoiceId; i++) {
+            if (!invoices[i].paid && !invoices[i].canceled) {
+                unpaidInvoiceIds[count] = i;
+                count++;
+            }
+        }
+        return unpaidInvoiceIds;
+        }
+
+    function listPaidInvoices() external view returns (uint256[] memory) {
+        uint256[] memory paidInvoiceIds = new uint256[](nextInvoiceId - 1);
+        uint256 count;
+        for (uint256 i = 1; i < nextInvoiceId; i++) {
+            if (invoices[i].paid) {
+                paidInvoiceIds[count] = i;
+                count++;
+            }
+        }
+        return paidInvoiceIds;
+    }
+
+    function getInvoiceBalance(uint256 invoiceId) external view returns (uint256) {
+        Invoice storage invoice = invoices[invoiceId];
+        return invoice.amount - address(invoice.recipient).balance;
+    }
+
+    function getInvoicePaymentHistory(uint256 invoiceId) external view returns (uint256[] memory) {
+        Invoice storage invoice = invoices[invoiceId];
+        return invoice.paymentHistory;
+    }
+}
+pragma solidity ^0.8.0;
+
+contract EscrowInvoicing {
+    address public payer;
+    address public payee;
+    address public escrowAgent;
+    uint256 public invoiceAmount;
+    uint256 public escrowAmount;
+    bool public invoicePaid;
+    bool public escrowReleased;
+
+    constructor(
+        address _payer,
+        address _payee,
+        address _escrowAgent,
+        uint256 _invoiceAmount,
+        uint256 _escrowAmount
+    ) {
+        payer = _payer;
+        payee = _payee;
+        escrowAgent = _escrowAgent;
+        invoiceAmount = _invoiceAmount;
+        escrowAmount = _escrowAmount;
+        invoicePaid = false;
+        escrowReleased = false;
+    }
+
+    modifier onlyPayer() {
+        require(msg.sender == payer, "Only payer can call this function");
+        _;
+    }
+
+    modifier onlyEscrowAgent() {
+        require(msg.sender == escrowAgent, "Only escrow agent can call this function");
+        _;
+    }
+
+    function payInvoice() external payable onlyPayer {
+        require(msg.value == invoiceAmount, "Incorrect payment amount");
+        require(!invoicePaid, "Invoice already paid");
+        invoicePaid = true;
+    }
+
+    function releaseEscrow() external onlyEscrowAgent {
+        require(invoicePaid, "Invoice must be paid before releasing escrow");
+        require(!escrowReleased, "Escrow already released");
+        escrowReleased = true;
+        payable(payee).transfer(escrowAmount);
+    }
+
+    function refundPayer() external onlyEscrowAgent {
+        require(invoicePaid, "Invoice must be paid before refunding payer");
+        require(!escrowReleased, "Escrow already released");
+        escrowReleased = true;
+        payable(payer).transfer(invoiceAmount);
+    }
+}
+
+
+    
+    
